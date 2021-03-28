@@ -179,6 +179,26 @@ public:
 		return mBuffer[pos];
 	}
 
+	char &front()
+	{
+		return mBuffer[0];
+	}
+
+	const char &front() const
+	{
+		return mBuffer[0];
+	}
+
+	char &back()
+	{
+		return mBuffer[size() - 1];
+	}
+
+	const char &back() const
+	{
+		return mBuffer[size() - 1];
+	}
+
 	bool operator==(const string &rhs) const noexcept
 	{
 		const size_type lhs_sz = size();
@@ -361,6 +381,44 @@ public:
 		mBuffer.reset();
 	}
 
+	bool starts_with(const std::string_view &sv) const noexcept
+	{
+		return sv.size() > size() ? false :
+			std::char_traits<char>::compare(data(), sv.data(), sv.size()) == 0;
+	}
+
+	bool starts_with(char c) const noexcept
+	{
+		return empty() ? false : mBuffer[0] == c;
+	}
+
+	bool starts_with(const char *str) const
+	{
+		return starts_with(std::string_view(str, std::char_traits<char>::length(str)));
+	}
+
+	bool ends_with(const std::string_view &sv) const noexcept
+	{
+		return sv.size() > size() ? false :
+			std::char_traits<char>::compare(&mBuffer[size()] - sv.size(), sv.data(), sv.size()) == 0;
+	}
+
+	bool ends_with(char c) const noexcept
+	{
+		return empty() ? false : mBuffer[size() - 1] == c;
+	}
+
+	bool ends_with(const char *str) const
+	{
+		return ends_with(std::string_view(str, std::char_traits<char>::length(str)));
+	}
+
+	string &lowered()
+	{
+		std::transform(cbegin(), cend(), begin(), ::tolower);
+		return *this;
+	}
+
 	string lower() const
 	{
 		string low = *this;
@@ -369,12 +427,37 @@ public:
 		return low;
 	}
 
+	string &uppered()
+	{
+		std::transform(cbegin(), cend(), begin(), ::toupper);
+		return *this;
+	}
+
 	string upper() const
 	{
 		string up = *this;
 
 		std::transform(up.cbegin(), up.cend(), up.begin(), ::toupper);
 		return up;
+	}
+
+	string &reversed()
+	{
+		if (size() > 1)
+		{
+			const size_type even = size() % 2;
+
+			for (size_type i = 0; i < size(); ++i)
+			{
+				const size_type back_index = size() - i - 1;
+				std::swap(mBuffer[i], mBuffer[back_index]);
+
+				if (i + 1 == back_index - even)
+					break;
+			}
+		}
+
+		return *this;
 	}
 
 	string reverse() const
@@ -480,9 +563,7 @@ public:
 				{
 				case split_side::left:
 					if (--i > 0)
-					{
 						return std::string_view(&mBuffer[0], real_index);
-					}
 					else
 						return {};
 				case split_side::right:
@@ -603,6 +684,12 @@ bool contains(const std::string_view &str, const std::string_view &substring)
 	return false;
 }
 
+std::string &lowered(std::string &str)
+{
+	std::transform(str.cbegin(), str.cend(), str.begin(), ::tolower);
+	return str;
+}
+
 std::string lower(const std::string_view &view)
 {
 	std::string low(view);
@@ -611,12 +698,37 @@ std::string lower(const std::string_view &view)
 	return low;
 }
 
+std::string &uppered(std::string &str)
+{
+	std::transform(str.cbegin(), str.cend(), str.begin(), ::toupper);
+	return str;
+}
+
 std::string upper(const std::string_view &view)
 {
 	std::string up(view);
 
 	std::transform(up.cbegin(), up.cend(), up.begin(), ::toupper);
 	return up;
+}
+
+std::string &reversed(std::string &str)
+{
+	if (str.size() > 1)
+	{
+		const std::size_t even = str.size() % 2;
+
+		for (std::size_t i = 0; i < str.size(); ++i)
+		{
+			const std::size_t back_index = str.size() - i - 1;
+			std::swap(str[i], str[back_index]);
+
+			if (i + 1 == back_index - even)
+				break;
+		}
+	}
+
+	return str;
 }
 
 std::string reverse(const std::string_view &view)
@@ -632,28 +744,25 @@ std::string reverse(const std::string_view &view)
 	return str;
 }
 
-std::vector<std::string_view> split_views(const std::string_view &view, char ch, std::size_t offset = 0)
+void split(const std::string_view &view, char ch, std::vector<std::string_view> &out, std::size_t offset = 0)
 {
 	// Note: This also serves as an empty() check
 	if (offset >= view.size())
-		return {};
+		return;
 
-	std::vector<std::string_view> views;
 	std::size_t last_split = offset;
 
 	for (std::size_t i = offset; i < view.size(); ++i)
 	{
 		if (view[i] == ch)
 		{
-			views.emplace_back(std::string_view(&view[last_split], i - last_split));
+			out.emplace_back(std::string_view(&view[last_split], i - last_split));
 			last_split = i + 1;
 		}
 	}
 
 	if (last_split < view.size())
-		views.emplace_back(std::string_view(&view[last_split], view.size() - last_split));
-
-	return views;
+		out.emplace_back(std::string_view(&view[last_split], view.size() - last_split));
 }
 
 }
