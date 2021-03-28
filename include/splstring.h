@@ -32,6 +32,9 @@
 #include <cstring>
 #include <charconv>
 #include <vector>
+#include <array>
+#include <limits>
+#include <filesystem>
 
 namespace spl
 {
@@ -292,6 +295,43 @@ public:
 	}
 #endif
 
+	string &operator+=(const std::string_view &str)
+	{
+		if (!str.empty())
+		{
+			const size_type old_size = size();
+			resize(old_size + str.size());
+
+			std::memcpy(&mBuffer[old_size], str.data(), str.size());
+		}
+		
+		return *this;
+	}
+
+	string &operator+=(const string &str)
+	{
+		if (!str.empty())
+		{
+			const size_type old_size = size();
+			resize(old_size + str.size());
+
+			std::memcpy(&mBuffer[old_size], str.data(), str.size());
+		}
+		
+		return *this;
+	}
+
+	string &operator+=(char ch)
+	{
+		resize(size() + 1, ch);
+		return *this;
+	}
+
+	string &operator+=(const char *str)
+	{
+		return operator+=(std::string_view(str));
+	}
+
 	int compare(const string &str) const noexcept
 	{
 		const size_type lhs_sz = size();
@@ -345,6 +385,27 @@ public:
 		return false;
 	}
 
+	void resize(size_type count)
+	{
+		return resize(count, char());
+	}
+
+	void resize(size_type count, char ch)
+	{
+		if (count <= mLength)
+			mLength = count;
+		else
+		{
+			std::unique_ptr<char[]> buffer = std::make_unique<char[]>(count);
+			std::memcpy(&buffer[0], &mBuffer[0], mLength);
+
+			std::fill_n(&buffer[mLength], count - mLength, ch);
+
+			mLength = count;
+			mBuffer = std::move(buffer);
+		}
+	}
+
 	iterator begin() noexcept { return mBuffer.get() ? iterator(mBuffer.get(), &mBuffer[mLength - 1]) : end(); }
 	iterator end() noexcept { return iterator(nullptr, nullptr); }
 
@@ -365,6 +426,7 @@ public:
 
 	operator std::string() const { return std_string(); }
 	operator std::string_view() const noexcept { return view(); }
+	operator std::filesystem::path() const { return { view() }; }
 
 	char *data() noexcept { return mBuffer.get(); }
 	const char *data() const noexcept { return mBuffer.get(); }
@@ -465,7 +527,7 @@ public:
 		if (empty())
 			return {};
 
-		string str(size(), '\0');
+		string str(size(), char());
 
 		for (size_type i = 0; i < size(); ++i)
 			str[i] = mBuffer[size() - i - 1];
@@ -603,6 +665,16 @@ public:
 		return os << str.view();
 	}
 
+	friend spl::string operator+(const std::string_view &lhs, const std::string_view &rhs)
+	{
+		string str(lhs.size() + rhs.size(), char());
+
+		std::memcpy(str.data(), lhs.data(), lhs.size());
+		std::memcpy(str.data() + lhs.size(), rhs.data(), rhs.size());
+
+		return str;
+	}
+
 private:
 	size_type mLength = 0;
 	std::unique_ptr<char[]> mBuffer;
@@ -660,6 +732,16 @@ string::string(const char *str, size_type count)
 
 	mBuffer = std::make_unique<char[]>(mLength);
 	std::memcpy(&mBuffer[0], str, mLength);
+}
+
+template<typename T>
+string to_string(T value)
+{
+	constexpr std::size_t maxDigits = 35;
+	std::array<char, maxDigits> str;
+
+	auto [p, ec] = std::to_chars(str.data(), str.data() + str.size(), value);
+	return string(std::string_view(str.data(), p - str.data()));
 }
 
 // Extra logic for standard strings
@@ -736,7 +818,7 @@ std::string reverse(const std::string_view &view)
 	if (view.empty())
 		return {};
 
-	std::string str(view.size(), '\0');
+	std::string str(view.size(), char());
 
 	for (std::size_t i = 0; i < view.size(); ++i)
 		str[i] = view[view.size() - i - 1];
@@ -766,6 +848,8 @@ void split(const std::string_view &view, char ch, std::vector<std::string_view> 
 }
 
 }
+
+// Hashing so spl::string can be used in containers like std::unordered_map
 
 namespace std
 {
