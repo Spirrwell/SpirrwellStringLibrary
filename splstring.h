@@ -107,6 +107,7 @@ public:
 	string(const std::string &str);
 	string(const std::string_view &sv);
 	string(const char *str);
+	string(const char *str, size_type count);
 
 	string &operator=(const string &rhs)
 	{
@@ -398,6 +399,46 @@ public:
 		return {};
 	}
 
+private:
+
+	template<typename T>
+	void split_into_vector(char ch, std::vector<T> &out, size_type offset = 0) const
+	{
+		// Note: This also serves as an empty() check
+		if (offset >= size())
+			return;
+
+		size_type last_split = offset;
+
+		for (size_type i = offset; i < size(); ++i)
+		{
+			if (mBuffer[i] == ch)
+			{
+				out.emplace_back(T(&mBuffer[last_split], i - last_split));
+				last_split = i + 1;
+			}
+		}
+
+		if (last_split < size())
+			out.emplace_back(T(&mBuffer[last_split], size() - last_split));
+	}
+
+public:
+	void split(char ch, std::vector<string> &out, size_type offset = 0) const
+	{
+		return split_into_vector(ch, out, offset);
+	}
+
+	void split(char ch, std::vector<std::string> &out, size_type offset = 0) const
+	{
+		return split_into_vector(ch, out, offset);
+	}
+
+	void split(char ch, std::vector<std::string_view> &out, size_type offset = 0) const
+	{
+		return split_into_vector(ch, out, offset);
+	}
+
 	std::string_view rsplit(char ch, size_type roffset = 0, split_side side = split_side::right) const
 	{
 		// Note: This also serves as an empty() check
@@ -439,37 +480,14 @@ public:
 		return {};
 	}
 
-	std::vector<std::string_view> split_views(char ch, size_type offset = 0) const
-	{
-		// Note: This also serves as an empty() check
-		if (offset >= size())
-			return {};
-
-		std::vector<std::string_view> views;
-		size_type last_split = offset;
-
-		for (size_type i = offset; i < size(); ++i)
-		{
-			if (mBuffer[i] == ch)
-			{
-				views.emplace_back(std::string_view(&mBuffer[last_split], i - last_split));
-				last_split = i + 1;
-			}
-		}
-
-		if (last_split < size())
-			views.emplace_back(std::string_view(&mBuffer[last_split], size() - last_split));
-
-		return views;
-	}
-
 	template <typename T>
 	T get_as() const
 	{
 		T value = {};
 
-		if (mBuffer.get())
-			std::from_chars(mBuffer.get(), &mBuffer[mLength - 1], value);
+		// Note: Using data() + mLength here because using &mBuffer[mLength] feels wrong even though it's fine.
+		if (data())
+			std::from_chars(data(), data() + mLength, value);
 
 		return value;
 	}
@@ -489,7 +507,7 @@ string::string(size_type count, char ch)
 	mLength = count;
 
 	mBuffer = std::make_unique<char[]>(mLength);
-	std::fill_n(mBuffer.get(), mLength, ch);
+	std::fill_n(&mBuffer[0], mLength, ch);
 }
 
 string::string(string &&other) noexcept :
@@ -503,7 +521,7 @@ string::string(const string &other)
 	mLength = other.size();
 
 	mBuffer = std::make_unique<char[]>(mLength);
-	std::memcpy(mBuffer.get(), other.data(), mLength);
+	std::memcpy(&mBuffer[0], other.data(), mLength);
 }
 
 string::string(const std::string &str)
@@ -511,7 +529,7 @@ string::string(const std::string &str)
 	mLength = str.size();
 
 	mBuffer = std::make_unique<char[]>(mLength);
-	std::memcpy(mBuffer.get(), str.data(), mLength);
+	std::memcpy(&mBuffer[0], str.data(), mLength);
 }
 
 string::string(const std::string_view &sv)
@@ -519,7 +537,7 @@ string::string(const std::string_view &sv)
 	mLength = sv.size();
 
 	mBuffer = std::make_unique<char[]>(mLength);
-	std::memcpy(mBuffer.get(), sv.data(), mLength);
+	std::memcpy(&mBuffer[0], sv.data(), mLength);
 }
 
 string::string(const char *str)
@@ -527,7 +545,15 @@ string::string(const char *str)
 	mLength = std::strlen(str);
 
 	mBuffer = std::make_unique<char[]>(mLength);
-	std::memcpy(mBuffer.get(), str, mLength);
+	std::memcpy(&mBuffer[0], str, mLength);
+}
+
+string::string(const char *str, size_type count)
+{
+	mLength = count;
+
+	mBuffer = std::make_unique<char[]>(mLength);
+	std::memcpy(&mBuffer[0], str, mLength);
 }
 
 // Extra logic for standard strings
