@@ -41,6 +41,7 @@ namespace spl
 class string
 {
 public:
+
 	enum struct split_side
 	{
 		left,
@@ -67,7 +68,7 @@ public:
 		iterator_base(const iterator_base &it) : mCurrent(it.mCurrent), mEnd(it.mEnd) {}
 
 		bool operator==(const iterator_base &rhs) const { return mCurrent == rhs.mCurrent; }
-		bool operator !=(const iterator_base &rhs) const { return mCurrent != rhs.mCurrent; }
+		bool operator!=(const iterator_base &rhs) const { return mCurrent != rhs.mCurrent; }
 
 		char &operator*() { return *mCurrent; }
 		const char &operator*() const { return *mCurrent; }
@@ -96,6 +97,17 @@ public:
 		{
 			iterator retval = *this;
 			++(*this);
+
+			return retval;
+		}
+
+		friend iterator operator+(const iterator &lhs, difference_type count)
+		{
+			iterator retval = lhs;
+			retval.mCurrent += count;
+
+			if (retval.mCurrent > retval.mEnd)
+				retval.mCurrent = nullptr;
 
 			return retval;
 		}
@@ -133,16 +145,20 @@ public:
 
 	using size_type = std::size_t;
 
-	string();
+	constexpr static size_type npos = std::numeric_limits<size_type>::max();
 
-	string(size_type count, char ch);
+	inline string();
 
-	string(string &&other) noexcept;
-	string(const string &other);
-	string(const std::string &str);
-	string(const std::string_view &sv);
-	string(const char *str);
-	string(const char *str, size_type count);
+	inline string(size_type count, char ch);
+
+	inline string(string &&other) noexcept;
+	inline string(const string &other);
+	inline string(const std::string &str);
+	inline string(const std::string_view &sv);
+	inline string(const char *str);
+	inline string(const char *str, size_type count);
+
+	inline string(const std::string_view &sv, size_type pos, size_type n);
 
 private:
 
@@ -440,15 +456,17 @@ public:
 	operator std::string_view() const noexcept { return view(); }
 	operator std::filesystem::path() const { return { view() }; }
 
-	char *data() noexcept { return &mBuffer[0]; }
-	const char *data() const noexcept { return &mBuffer[0]; }
+	char *data() { return &mBuffer[0]; }
+	const char *data() const { return &mBuffer[0]; }
+	const char *c_str() const { return &mBuffer[0]; }
+
 	std::string_view view() const noexcept { return { data(), size() }; }
 	std::string std_string() const { return { data(), size() }; }
 
 	bool empty() const noexcept { return mLength == 0; }
 	size_type size() const noexcept { return mLength; }
 	size_type length() const noexcept { return mLength; }
-	size_type max_size() const noexcept { return std::numeric_limits<size_type>::max() - 1; } // -1 for null terminator or when we eventually add std::string::npos equivalent
+	size_type max_size() const noexcept { return std::numeric_limits<size_type>::max() - 1; } // -1 for null terminator or npos
 
 	void clear()
 	{
@@ -456,6 +474,59 @@ public:
 		reallocate(1);
 
 		mBuffer[mLength] = '\0';
+	}
+
+	string &erase(size_type index, size_type count = npos)
+	{
+		// Note: According to cppreference, std::string throws only if > size()
+		// Erasing at an index of size() should make the count 0 and erase nothing
+		// But this is still stupid IMHO
+		if (index > size())
+			throw std::out_of_range("invalid string position");
+
+		count = std::min(count, size() - index);
+		const size_type end = index + count;
+
+		for (size_type i = end; i < size(); ++i)
+			mBuffer[i - count] = mBuffer[i];
+
+		mLength -= count;
+		mBuffer[mLength] = '\0';
+
+		return *this;
+	}
+
+	iterator erase(const_iterator position)
+	{
+		if (position == cend())
+			return end();
+
+		iterator current = position;
+		iterator next = position;
+
+		for (++next; next != end(); ++next, ++current)
+			*current = *next;
+
+		mLength -= 1;
+		mBuffer[mLength] = '\0';
+
+		return empty() ? end() : position;
+	}
+
+	iterator erase(const_iterator first, const_iterator last)
+	{
+		auto range = std::distance(first, last);
+
+		iterator current = first;
+		iterator next = last;
+
+		for (;next != end(); ++next, ++current)
+			*current = *next;
+
+		mLength -= range;
+		mBuffer[mLength] = '\0';
+
+		return empty() ? end() : first;
 	}
 
 	void pop_back()
@@ -736,18 +807,28 @@ public:
 		return str;
 	}
 
+	friend spl::string operator+(const std::string_view &lhs, char rhs)
+	{
+		string str(lhs.size() + 1, char());
+
+		std::memcpy(str.data(), lhs.data(), lhs.size());
+		std::memcpy(str.data() + lhs.size(), &rhs, sizeof(rhs));
+
+		return str;
+	}
+
 private:
 	size_type mLength = 0;
 	std::unique_ptr<char[], buffer_deleter> mBuffer;
 };
 
-string::string()
+inline string::string()
 {
 	allocate(1);
 	mBuffer[mLength] = '\0';
 }
 
-string::string(size_type count, char ch)
+inline string::string(size_type count, char ch)
 {
 	mLength = count;
 
@@ -757,13 +838,13 @@ string::string(size_type count, char ch)
 	std::fill_n(&mBuffer[0], mLength, ch);
 }
 
-string::string(string &&other) noexcept :
+inline string::string(string &&other) noexcept :
 	mLength(std::exchange(other.mLength, 0)),
 	mBuffer(std::move(other.mBuffer))
 {
 }
 
-string::string(const string &other)
+inline string::string(const string &other)
 {
 	mLength = other.size();
 
@@ -773,7 +854,7 @@ string::string(const string &other)
 	std::memcpy(&mBuffer[0], other.data(), mLength);
 }
 
-string::string(const std::string &str)
+inline string::string(const std::string &str)
 {
 	mLength = str.size();
 
@@ -783,7 +864,7 @@ string::string(const std::string &str)
 	std::memcpy(&mBuffer[0], str.data(), mLength);
 }
 
-string::string(const std::string_view &sv)
+inline string::string(const std::string_view &sv)
 {
 	mLength = sv.size();
 
@@ -793,7 +874,7 @@ string::string(const std::string_view &sv)
 	std::memcpy(&mBuffer[0], sv.data(), mLength);
 }
 
-string::string(const char *str)
+inline string::string(const char *str)
 {
 	mLength = std::char_traits<char>::length(str);
 
@@ -803,7 +884,7 @@ string::string(const char *str)
 	std::memcpy(&mBuffer[0], str, mLength);
 }
 
-string::string(const char *str, size_type count)
+inline string::string(const char *str, size_type count)
 {
 	mLength = count;
 
@@ -811,6 +892,17 @@ string::string(const char *str, size_type count)
 	mBuffer[mLength] = '\0';
 
 	std::memcpy(&mBuffer[0], str, mLength);
+}
+
+// TODO: Safety?
+inline string::string(const std::string_view &sv, size_type pos, size_type n)
+{
+	mLength = n;
+
+	allocate(mLength + 1);
+	mBuffer[mLength] = '\0';
+
+	std::memcpy(&mBuffer[0], &sv[pos], n);
 }
 
 template<typename T>
@@ -825,7 +917,7 @@ string to_string(T value)
 
 // Extra logic for standard strings
 
-bool contains(const std::string_view &str, const std::string_view &substring)
+inline bool contains(const std::string_view &str, const std::string_view &substring)
 {
 	if (substring.size() > str.size())
 		return false;
@@ -845,13 +937,13 @@ bool contains(const std::string_view &str, const std::string_view &substring)
 	return false;
 }
 
-std::string &lowered(std::string &str)
+inline std::string &lowered(std::string &str)
 {
 	std::transform(str.cbegin(), str.cend(), str.begin(), ::tolower);
 	return str;
 }
 
-std::string lower(const std::string_view &view)
+inline std::string lower(const std::string_view &view)
 {
 	std::string low(view);
 	std::transform(low.cbegin(), low.cend(), low.begin(), ::tolower);
@@ -859,13 +951,13 @@ std::string lower(const std::string_view &view)
 	return low;
 }
 
-std::string &uppered(std::string &str)
+inline std::string &uppered(std::string &str)
 {
 	std::transform(str.cbegin(), str.cend(), str.begin(), ::toupper);
 	return str;
 }
 
-std::string upper(const std::string_view &view)
+inline std::string upper(const std::string_view &view)
 {
 	std::string up(view);
 
@@ -873,7 +965,7 @@ std::string upper(const std::string_view &view)
 	return up;
 }
 
-std::string &reversed(std::string &str)
+inline std::string &reversed(std::string &str)
 {
 	if (str.size() > 1)
 	{
@@ -892,7 +984,7 @@ std::string &reversed(std::string &str)
 	return str;
 }
 
-std::string reverse(const std::string_view &view)
+inline std::string reverse(const std::string_view &view)
 {
 	if (view.empty())
 		return {};
@@ -905,7 +997,7 @@ std::string reverse(const std::string_view &view)
 	return str;
 }
 
-void split(const std::string_view &view, char ch, std::vector<std::string_view> &out, std::size_t offset = 0)
+inline void split(const std::string_view &view, char ch, std::vector<std::string_view> &out, std::size_t offset = 0)
 {
 	// Note: This also serves as an empty() check
 	if (offset >= view.size())
