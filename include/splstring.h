@@ -47,6 +47,14 @@ public:
 		right
 	};
 
+	struct buffer_deleter
+	{
+		void operator()(char memory[])
+		{
+			std::free(memory);
+		}
+	};
+
 	struct iterator_base
 	{
 		using iterator_category = std::input_iterator_tag;
@@ -125,7 +133,7 @@ public:
 
 	using size_type = std::size_t;
 
-	string() = default;
+	string();
 
 	string(size_type count, char ch);
 
@@ -136,15 +144,32 @@ public:
 	string(const char *str);
 	string(const char *str, size_type count);
 
+private:
+
+	void allocate(size_type new_size)
+	{
+		mBuffer.reset((char*)std::malloc(new_size));
+	}
+
+	void reallocate(size_type new_size)
+	{
+		mBuffer.reset((char*)std::realloc(mBuffer.release(), new_size));
+	}
+
+public:
+
 	string &operator=(const string &rhs)
 	{
 		if (&rhs == this)
 			return *this;
 
 		mLength = rhs.mLength;
-		mBuffer = std::make_unique<char[]>(mLength);
+		
+		reallocate(mLength + 1);
+		mBuffer[mLength] = '\0';
 
 		std::memcpy(mBuffer.get(), rhs.data(), mLength);
+
 		return *this;
 	}
 
@@ -297,34 +322,17 @@ public:
 
 	string &operator+=(const std::string_view &str)
 	{
-		if (!str.empty())
-		{
-			const size_type old_size = size();
-			resize(old_size + str.size());
-
-			std::memcpy(&mBuffer[old_size], str.data(), str.size());
-		}
-		
-		return *this;
+		return append(str);
 	}
 
 	string &operator+=(const string &str)
 	{
-		if (!str.empty())
-		{
-			const size_type old_size = size();
-			resize(old_size + str.size());
-
-			std::memcpy(&mBuffer[old_size], str.data(), str.size());
-		}
-		
-		return *this;
+		return append(str);
 	}
 
 	string &operator+=(char ch)
 	{
-		resize(size() + 1, ch);
-		return *this;
+		return append(1, ch);
 	}
 
 	string &operator+=(const char *str)
@@ -392,55 +400,108 @@ public:
 
 	void resize(size_type count, char ch)
 	{
+		if (count > max_size())
+			throw std::length_error("string too long");
+
 		if (count <= mLength)
+		{
 			mLength = count;
+			mBuffer[mLength] = '\0';
+		}
 		else
 		{
-			std::unique_ptr<char[]> buffer = std::make_unique<char[]>(count);
-			std::memcpy(&buffer[0], &mBuffer[0], mLength);
+			reallocate(count + 1);
+			mBuffer[count] = '\0';
 
-			std::fill_n(&buffer[mLength], count - mLength, ch);
-
+			std::fill_n(&mBuffer[mLength], count - mLength, ch);
 			mLength = count;
-			mBuffer = std::move(buffer);
 		}
 	}
 
-	iterator begin() noexcept { return mBuffer.get() ? iterator(mBuffer.get(), &mBuffer[mLength - 1]) : end(); }
+	iterator begin() noexcept { return !empty() ? iterator(mBuffer.get(), &mBuffer[mLength - 1]) : end(); }
 	iterator end() noexcept { return iterator(nullptr, nullptr); }
 
-	const_iterator begin() const noexcept { return mBuffer.get() ? const_iterator(mBuffer.get(), &mBuffer[mLength - 1]) : end(); }
+	const_iterator begin() const noexcept { return !empty() ? const_iterator(mBuffer.get(), &mBuffer[mLength - 1]) : end(); }
 	const_iterator end() const noexcept { return const_iterator(nullptr, nullptr); }
 
-	const_iterator cbegin() const noexcept { return mBuffer.get() ? const_iterator(mBuffer.get(), &mBuffer[mLength - 1]) : end(); }
+	const_iterator cbegin() const noexcept { return !empty() ? const_iterator(mBuffer.get(), &mBuffer[mLength - 1]) : end(); }
 	const_iterator cend() const noexcept { return const_iterator(nullptr, nullptr); }
 
-	reverse_iterator rbegin() noexcept { return mBuffer.get() ? reverse_iterator(&mBuffer[mLength - 1], mBuffer.get()) : rend(); }
+	reverse_iterator rbegin() noexcept { return !empty() ? reverse_iterator(&mBuffer[mLength - 1], mBuffer.get()) : rend(); }
 	reverse_iterator rend() noexcept { return reverse_iterator(nullptr, nullptr); }
 
-	const_reverse_iterator rbegin() const noexcept { return mBuffer.get() ? const_reverse_iterator(&mBuffer[mLength - 1], mBuffer.get()) : rend(); }
+	const_reverse_iterator rbegin() const noexcept { return !empty() ? const_reverse_iterator(&mBuffer[mLength - 1], mBuffer.get()) : rend(); }
 	const_reverse_iterator rend() const noexcept { return const_reverse_iterator(nullptr, nullptr); }
 
-	const_reverse_iterator crbegin() const noexcept { return mBuffer.get() ? const_reverse_iterator(&mBuffer[mLength - 1], mBuffer.get()) : crend(); }
+	const_reverse_iterator crbegin() const noexcept { return !empty() ? const_reverse_iterator(&mBuffer[mLength - 1], mBuffer.get()) : crend(); }
 	const_reverse_iterator crend() const noexcept { return const_reverse_iterator(nullptr, nullptr); }
 
 	operator std::string() const { return std_string(); }
 	operator std::string_view() const noexcept { return view(); }
 	operator std::filesystem::path() const { return { view() }; }
 
-	char *data() noexcept { return mBuffer.get(); }
-	const char *data() const noexcept { return mBuffer.get(); }
+	char *data() noexcept { return &mBuffer[0]; }
+	const char *data() const noexcept { return &mBuffer[0]; }
 	std::string_view view() const noexcept { return { data(), size() }; }
 	std::string std_string() const { return { data(), size() }; }
 
 	bool empty() const noexcept { return mLength == 0; }
 	size_type size() const noexcept { return mLength; }
 	size_type length() const noexcept { return mLength; }
+	size_type max_size() const noexcept { return std::numeric_limits<size_type>::max() - 1; } // -1 for null terminator or when we eventually add std::string::npos equivalent
 
-	void clear() noexcept
+	void clear()
 	{
 		mLength = 0;
-		mBuffer.reset();
+		reallocate(1);
+
+		mBuffer[mLength] = '\0';
+	}
+
+	void pop_back()
+	{
+		if (!empty())
+		{
+			--mLength;
+			mBuffer[mLength] = '\0';
+		}
+	}
+
+	void push_back(char ch)
+	{
+		resize(size() + 1, ch);
+	}
+
+	string &append(size_type count, char ch)
+	{
+		resize(size() + count, ch);
+		return *this;
+	}
+
+	string &append(const std::string_view &str)
+	{
+		if (!str.empty())
+		{
+			const size_type old_size = size();
+			resize(old_size + str.size());
+
+			std::memcpy(&mBuffer[old_size], str.data(), str.size());
+		}
+
+		return *this;
+	}
+
+	string &append(const string &str)
+	{
+		if (!str.empty())
+		{
+			const size_type old_size = size();
+			resize(old_size + str.size());
+
+			std::memcpy(&mBuffer[old_size], str.data(), str.size());
+		}
+		
+		return *this;
 	}
 
 	bool starts_with(const std::string_view &sv) const noexcept
@@ -677,14 +738,22 @@ public:
 
 private:
 	size_type mLength = 0;
-	std::unique_ptr<char[]> mBuffer;
+	std::unique_ptr<char[], buffer_deleter> mBuffer;
 };
+
+string::string()
+{
+	allocate(1);
+	mBuffer[mLength] = '\0';
+}
 
 string::string(size_type count, char ch)
 {
 	mLength = count;
 
-	mBuffer = std::make_unique<char[]>(mLength);
+	allocate(mLength + 1);
+	mBuffer[mLength] = '\0';
+
 	std::fill_n(&mBuffer[0], mLength, ch);
 }
 
@@ -698,7 +767,9 @@ string::string(const string &other)
 {
 	mLength = other.size();
 
-	mBuffer = std::make_unique<char[]>(mLength);
+	allocate(mLength + 1);
+	mBuffer[mLength] = '\0';
+
 	std::memcpy(&mBuffer[0], other.data(), mLength);
 }
 
@@ -706,7 +777,9 @@ string::string(const std::string &str)
 {
 	mLength = str.size();
 
-	mBuffer = std::make_unique<char[]>(mLength);
+	allocate(mLength + 1);
+	mBuffer[mLength] = '\0';
+
 	std::memcpy(&mBuffer[0], str.data(), mLength);
 }
 
@@ -714,15 +787,19 @@ string::string(const std::string_view &sv)
 {
 	mLength = sv.size();
 
-	mBuffer = std::make_unique<char[]>(mLength);
+	allocate(mLength + 1);
+	mBuffer[mLength] = '\0';
+
 	std::memcpy(&mBuffer[0], sv.data(), mLength);
 }
 
 string::string(const char *str)
 {
-	mLength = std::strlen(str);
+	mLength = std::char_traits<char>::length(str);
 
-	mBuffer = std::make_unique<char[]>(mLength);
+	allocate(mLength + 1);
+	mBuffer[mLength] = '\0';
+
 	std::memcpy(&mBuffer[0], str, mLength);
 }
 
@@ -730,7 +807,9 @@ string::string(const char *str, size_type count)
 {
 	mLength = count;
 
-	mBuffer = std::make_unique<char[]>(mLength);
+	allocate(mLength + 1);
+	mBuffer[mLength] = '\0';
+
 	std::memcpy(&mBuffer[0], str, mLength);
 }
 
