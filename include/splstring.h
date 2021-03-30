@@ -40,20 +40,20 @@ namespace spl
 {
 class string
 {
-public:
-
-	enum struct split_side
-	{
-		left,
-		right
-	};
-
 	struct buffer_deleter
 	{
 		void operator()(char memory[])
 		{
 			std::free(memory);
 		}
+	};
+
+public:
+
+	enum struct split_side
+	{
+		left,
+		right
 	};
 
 	struct iterator_base
@@ -64,33 +64,32 @@ public:
 		using pointer = char*;
 		using reference = char&;
 
-		iterator_base(char *begin, char *end) : mCurrent(begin), mEnd(end) {}
-		iterator_base(const iterator_base &it) : mCurrent(it.mCurrent), mEnd(it.mEnd) {}
+		iterator_base(char *begin) noexcept : mCurrent(begin) {}
+		iterator_base(const iterator_base &it) noexcept : mCurrent(it.mCurrent) {}
 
-		bool operator==(const iterator_base &rhs) const { return mCurrent == rhs.mCurrent; }
-		bool operator!=(const iterator_base &rhs) const { return mCurrent != rhs.mCurrent; }
+		bool operator==(const iterator_base &rhs) const noexcept { return mCurrent == rhs.mCurrent; }
+		bool operator!=(const iterator_base &rhs) const noexcept { return mCurrent != rhs.mCurrent; }
 
 		char &operator*() { return *mCurrent; }
 		const char &operator*() const { return *mCurrent; }
 
 	protected:
 		char *mCurrent;
-		char *mEnd;
 	};
 
 	struct iterator : iterator_base
 	{
 		using iterator_base::iterator_base;
 
-		iterator &operator++()
+		iterator &operator++() noexcept
 		{
-			if (mCurrent)
-			{
-				if (++mCurrent > mEnd)
-					mCurrent = nullptr;
-			}
-
+			++mCurrent;
 			return *this;
+		}
+
+		iterator &operator--() noexcept
+		{
+			--mCurrent;
 		}
 
 		iterator operator++(int)
@@ -101,30 +100,49 @@ public:
 			return retval;
 		}
 
+		iterator operator--(int)
+		{
+			iterator retval = *this;
+			--(*this);
+
+			return retval;
+		}
+
 		friend iterator operator+(const iterator &lhs, difference_type count)
 		{
 			iterator retval = lhs;
 			retval.mCurrent += count;
 
-			if (retval.mCurrent > retval.mEnd)
-				retval.mCurrent = nullptr;
+			return retval;
+		}
+
+		friend iterator operator-(const iterator &lhs, difference_type count)
+		{
+			iterator retval = lhs;
+			retval.mCurrent -= count;
 
 			return retval;
 		}
+
+		bool operator<(const iterator &rhs) const noexcept { return mCurrent < rhs.mCurrent; }
+		bool operator<=(const iterator &rhs) const noexcept { return mCurrent <= rhs.mCurrent; }
+		bool operator>(const iterator &rhs) const noexcept { return mCurrent > rhs.mCurrent; }
+		bool operator>=(const iterator &rhs) const noexcept { return mCurrent >= rhs.mCurrent; }
 	};
 
 	struct reverse_iterator : iterator_base
 	{
 		using iterator_base::iterator_base;
 
-		reverse_iterator &operator++()
+		reverse_iterator &operator++() noexcept
 		{
-			if (mCurrent)
-			{
-				if (--mCurrent < mEnd)
-					mCurrent = nullptr;
-			}
+			--mCurrent;
+			return *this;
+		}
 
+		reverse_iterator &operator--() noexcept
+		{
+			++mCurrent;
 			return *this;
 		}
 
@@ -135,6 +153,35 @@ public:
 
 			return retval;
 		}
+
+		reverse_iterator operator--(int)
+		{
+			reverse_iterator retval = *this;
+			--(*this);
+
+			return retval;
+		}
+
+		friend reverse_iterator operator+(const reverse_iterator &lhs, difference_type count)
+		{
+			reverse_iterator retval = lhs;
+			retval.mCurrent -= count;
+
+			return retval;
+		}
+
+		friend reverse_iterator operator-(const reverse_iterator &lhs, difference_type count)
+		{
+			reverse_iterator retval = lhs;
+			retval.mCurrent += count;
+
+			return retval;
+		}
+
+		bool operator<(const reverse_iterator &rhs) const noexcept { return mCurrent > rhs.mCurrent; }
+		bool operator<=(const reverse_iterator &rhs) const noexcept { return mCurrent >= rhs.mCurrent; }
+		bool operator>(const reverse_iterator &rhs) const noexcept { return mCurrent < rhs.mCurrent; }
+		bool operator>=(const reverse_iterator &rhs) const noexcept { return mCurrent <= rhs.mCurrent; }
 	};
 
 	using const_iterator = iterator;
@@ -434,23 +481,23 @@ public:
 		}
 	}
 
-	iterator begin() noexcept { return !empty() ? iterator(mBuffer.get(), &mBuffer[mLength - 1]) : end(); }
-	iterator end() noexcept { return iterator(nullptr, nullptr); }
+	iterator begin() noexcept { return iterator(mBuffer.get()); }
+	iterator end() noexcept { return iterator(mBuffer.get() + mLength); }
 
-	const_iterator begin() const noexcept { return !empty() ? const_iterator(mBuffer.get(), &mBuffer[mLength - 1]) : end(); }
-	const_iterator end() const noexcept { return const_iterator(nullptr, nullptr); }
+	const_iterator begin() const noexcept { return const_iterator(mBuffer.get()); }
+	const_iterator end() const noexcept { return const_iterator(mBuffer.get() + mLength); }
 
-	const_iterator cbegin() const noexcept { return !empty() ? const_iterator(mBuffer.get(), &mBuffer[mLength - 1]) : end(); }
-	const_iterator cend() const noexcept { return const_iterator(nullptr, nullptr); }
+	const_iterator cbegin() const noexcept { return const_iterator(mBuffer.get()); }
+	const_iterator cend() const noexcept { return const_iterator(mBuffer.get() + mLength); }
 
-	reverse_iterator rbegin() noexcept { return !empty() ? reverse_iterator(&mBuffer[mLength - 1], mBuffer.get()) : rend(); }
-	reverse_iterator rend() noexcept { return reverse_iterator(nullptr, nullptr); }
+	reverse_iterator rbegin() noexcept { return reverse_iterator(mBuffer.get() + mLength - 1); }
+	reverse_iterator rend() noexcept { return reverse_iterator(mBuffer.get() - 1); }
 
-	const_reverse_iterator rbegin() const noexcept { return !empty() ? const_reverse_iterator(&mBuffer[mLength - 1], mBuffer.get()) : rend(); }
-	const_reverse_iterator rend() const noexcept { return const_reverse_iterator(nullptr, nullptr); }
+	const_reverse_iterator rbegin() const noexcept { return const_reverse_iterator(mBuffer.get() + mLength - 1); }
+	const_reverse_iterator rend() const noexcept { return const_reverse_iterator(mBuffer.get() - 1); }
 
-	const_reverse_iterator crbegin() const noexcept { return !empty() ? const_reverse_iterator(&mBuffer[mLength - 1], mBuffer.get()) : crend(); }
-	const_reverse_iterator crend() const noexcept { return const_reverse_iterator(nullptr, nullptr); }
+	const_reverse_iterator crbegin() const noexcept { return const_reverse_iterator(mBuffer.get() + mLength - 1); }
+	const_reverse_iterator crend() const noexcept { return const_reverse_iterator(mBuffer.get() - 1); }
 
 	operator std::string() const { return std_string(); }
 	operator std::string_view() const noexcept { return view(); }
