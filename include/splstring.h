@@ -422,40 +422,39 @@ public:
 		return 0;
 	}
 
+private:
+
+	template <typename T>
+	bool contains_string_like(const T &str) const
+	{
+		return find(str) != npos;
+	}
+
+public:
+
+	bool contains(const string &str) const
+	{
+		return contains_string_like(str);
+	}
+
+	bool contains(const std::string &str) const
+	{
+		return contains_string_like(str);
+	}
+
 	bool contains(const std::string_view &str) const
 	{
-		if (str.size() > size())
-			return false;
-
-		// Note: It seems like empty strings are still considered substrings of any string
-		if (str.empty())
-			return true;
-
-		const size_type difference = size() - str.size();
-
-		for (size_type i = 0; i <= difference; ++i)
-		{
-			if (std::char_traits<char>::compare(&mBuffer[i], str.data(), str.size()) == 0)
-				return true;
-		}
-
-		return false;
+		return contains_string_like(str);
 	}
 
 	bool contains(const char *str) const
 	{
-		return contains(std::string_view(str, std::char_traits<char>::length(str)));
+		return contains(std::string_view(str));
 	}
 
-	bool contains(char c) const
+	bool contains(char ch) const
 	{
-		for (size_type i = 0; i < size(); ++i)
-		{
-			if (mBuffer[i] == c)
-				return true;
-		}
-
-		return false;
+		return find(ch) != npos;
 	}
 
 	void resize(size_type count)
