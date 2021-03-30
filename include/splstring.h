@@ -549,9 +549,9 @@ public:
 			return end();
 
 		iterator current = position;
-		iterator next = position;
+		iterator next = position + 1;
 
-		for (++next; next != end(); ++next, ++current)
+		for (;next != end(); ++next, ++current)
 			*current = *next;
 
 		mLength -= 1;
@@ -562,7 +562,7 @@ public:
 
 	iterator erase(const_iterator first, const_iterator last)
 	{
-		auto range = std::distance(first, last);
+		const auto range = std::distance(first, last);
 
 		iterator current = first;
 		iterator next = last;
