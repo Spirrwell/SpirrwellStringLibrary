@@ -91,6 +91,7 @@ public:
 		iterator &operator--() noexcept
 		{
 			--mCurrent;
+			return *this;
 		}
 
 		iterator operator++(int)
