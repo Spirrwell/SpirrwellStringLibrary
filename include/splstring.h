@@ -488,18 +488,47 @@ private:
 	template <typename T>
 	size_type find_string_like(const T &str, size_type pos = 0) const
 	{
+		if (str.empty())
+			return pos <= size() ? pos : npos;
+
 		if (pos >= size())
 			return npos;
 
 		if (str.size() > size() - pos)
 			return npos;
 
-		const size_type difference = size() - pos - str.size();
+		const size_type end = size() - (size() - str.size());
 
-		for (size_type i = pos; i <= difference; ++i)
+		for (size_type i = pos; i <= end; ++i)
 		{
 			if (std::char_traits<char>::compare(&mBuffer[i], str.data(), str.size()) == 0)
 				return i;
+		}
+
+		return npos;
+	}
+
+	template <typename T>
+	size_type rfind_string_like(const T &str, size_type pos = npos) const
+	{
+		if (str.empty())
+			return pos > size() ? size() : pos;
+
+		if (empty())
+			return npos;
+
+		if (str.size() > size())
+			return npos;
+
+		pos = std::min(pos, size() - str.size());
+
+		const char *cur = &mBuffer[pos];
+		const char *end = mBuffer.get() - 1;
+
+		for (;cur != end; --cur)
+		{
+			if (std::char_traits<char>::compare(cur, str.data(), str.size()) == 0)
+				return cur - mBuffer.get();
 		}
 
 		return npos;
@@ -544,6 +573,50 @@ public:
 	size_type find(const std::string_view &sv, size_type pos = 0) const
 	{
 		return find_string_like(sv, pos);
+	}
+
+	size_type rfind(const string &str, size_type pos = npos) const
+	{
+		return rfind_string_like(str, pos);
+	}
+
+	size_type rfind(const std::string &str, size_type pos = npos) const
+	{
+		return rfind_string_like(str, pos);
+	}
+
+	size_type rfind(const char *str, size_type pos, size_type count) const
+	{
+		return rfind(std::string_view(str, count), pos);
+	}
+
+	size_type rfind(const char *str, size_type pos = npos) const
+	{
+		return rfind(std::string_view(str), pos);
+	}
+
+	size_type rfind(char ch, size_type pos = npos) const
+	{
+		if (empty())
+			return npos;
+
+		pos = std::min(pos, size() - 1);
+
+		const char *cur = &mBuffer[pos];
+		const char *end = mBuffer.get() - 1;
+
+		for (;cur != end; --cur)
+		{
+			if (*cur == ch)
+				return cur - mBuffer.get();
+		}
+
+		return npos;
+	}
+
+	size_type rfind(const std::string_view &sv, size_type pos = npos) const
+	{
+		return rfind_string_like(sv, pos);
 	}
 
 	iterator begin() noexcept { return iterator(mBuffer.get()); }
