@@ -35,6 +35,7 @@
 #include <array>
 #include <limits>
 #include <filesystem>
+#include <type_traits>
 
 namespace spl
 {
@@ -830,13 +831,22 @@ public:
 	template <typename T>
 	T get_as() const
 	{
-		T value = {};
+		if constexpr (std::is_same_v<T, bool>)
+		{
+			return (bool)get_as<int>();
+		}
+		else
+		{
+			static_assert(std::is_arithmetic_v<T>, "T is not a numeric type");
 
-		// Note: Using data() + mLength here because using &mBuffer[mLength] feels wrong even though it's fine.
-		if (data())
-			std::from_chars(data(), data() + mLength, value);
+			T value = {};
 
-		return value;
+			// Note: Using data() + mLength here because using &mBuffer[mLength] feels wrong even though it's fine.
+			if (data())
+				std::from_chars(data(), data() + mLength, value);
+
+			return value;
+		}
 	}
 
 	friend std::ostream &operator<<(std::ostream &os, const string &str)
