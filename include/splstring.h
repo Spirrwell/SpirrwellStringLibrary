@@ -435,7 +435,7 @@ public:
 
 		for (size_type i = 0; i <= difference; ++i)
 		{
-			if (mBuffer[i] == str[0] && std::char_traits<char>::compare(&mBuffer[i], str.data(), str.size()) == 0)
+			if (std::char_traits<char>::compare(&mBuffer[i], str.data(), str.size()) == 0)
 				return true;
 		}
 
@@ -481,6 +481,69 @@ public:
 			std::fill_n(&mBuffer[mLength], count - mLength, ch);
 			mLength = count;
 		}
+	}
+
+private:
+
+	template <typename T>
+	size_type find_string_like(const T &str, size_type pos = 0) const
+	{
+		if (pos >= size())
+			return npos;
+
+		if (str.size() > size() - pos)
+			return npos;
+
+		const size_type difference = size() - pos - str.size();
+
+		for (size_type i = pos; i <= difference; ++i)
+		{
+			if (std::char_traits<char>::compare(&mBuffer[i], str.data(), str.size()) == 0)
+				return i;
+		}
+
+		return npos;
+	}
+
+public:
+
+	size_type find(const string &str, size_type pos = 0) const
+	{
+		return find_string_like(str, pos);
+	}
+
+	size_type find(const std::string &str, size_type pos = 0) const
+	{
+		return find_string_like(str, pos);
+	}
+
+	size_type find(const char *str, size_type pos, size_type count) const
+	{
+		return find(std::string_view(str, count), pos);
+	}
+
+	size_type find(const char *str, size_type pos = 0) const
+	{
+		return find(std::string_view(str), pos);
+	}
+
+	size_type find(char ch, size_type pos = 0) const
+	{
+		if (pos >= size())
+			return npos;
+
+		for (size_type i = pos; i < size(); ++i)
+		{
+			if (mBuffer[i] == ch)
+				return i;
+		}
+
+		return npos;
+	}
+
+	size_type find(const std::string_view &sv, size_type pos = 0) const
+	{
+		return find_string_like(sv, pos);
 	}
 
 	iterator begin() noexcept { return iterator(mBuffer.get()); }
@@ -988,7 +1051,7 @@ inline bool contains(const std::string_view &str, const std::string_view &substr
 
 	for (std::size_t i = 0; i <= difference; ++i)
 	{
-		if (str[i] == substring[0] && std::char_traits<char>::compare(&str[i], substring.data(), substring.size()) == 0)
+		if (std::char_traits<char>::compare(&str[i], substring.data(), substring.size()) == 0)
 			return true;
 	}
 
