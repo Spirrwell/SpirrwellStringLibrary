@@ -39,6 +39,20 @@
 
 namespace spl
 {
+
+// Note: When searching for substrings, this can be significantly faster than
+// std::char_traits<char>::compare() on optimized/release builds, but slower on debug builds.
+inline bool compare_equal(const char *str1, const char *str2, std::size_t size)
+{
+	for (std::size_t i = 0; i < size; ++i)
+	{
+		if (str1[i] != str2[i])
+			return false;
+	}
+
+	return true;
+}
+
 class string
 {
 	struct buffer_deleter
@@ -496,11 +510,11 @@ private:
 		if (str.size() > size() - pos)
 			return npos;
 
-		const size_type end = size() - (size() - str.size());
+		const size_type end = size() - str.size();
 
 		for (size_type i = pos; i <= end; ++i)
 		{
-			if (std::char_traits<char>::compare(&mBuffer[i], str.data(), str.size()) == 0)
+			if (compare_equal(&mBuffer[i], str.data(), str.size()))
 				return i;
 		}
 
@@ -526,7 +540,7 @@ private:
 
 		for (;cur != end; --cur)
 		{
-			if (std::char_traits<char>::compare(cur, str.data(), str.size()) == 0)
+			if (compare_equal(cur, str.data(), str.size()))
 				return cur - mBuffer.get();
 		}
 
@@ -759,10 +773,29 @@ public:
 		return *this;
 	}
 
+private:
+	template <typename T>
+	bool starts_with_string_like(const T &str) const noexcept
+	{
+		return str.size() > size() ? false :
+			std::char_traits<char>::compare(data(), str.data(), str.size()) == 0;
+	}
+
+public:
+
+	bool starts_with(const string &str) const noexcept
+	{
+		return starts_with_string_like(str);
+	}
+
+	bool starts_with(const std::string &str) const noexcept
+	{
+		return starts_with_string_like(str);
+	}
+
 	bool starts_with(const std::string_view &sv) const noexcept
 	{
-		return sv.size() > size() ? false :
-			std::char_traits<char>::compare(data(), sv.data(), sv.size()) == 0;
+		return starts_with_string_like(sv);
 	}
 
 	bool starts_with(char c) const noexcept
@@ -770,15 +803,35 @@ public:
 		return empty() ? false : mBuffer[0] == c;
 	}
 
-	bool starts_with(const char *str) const
+	bool starts_with(const char *str) const noexcept
 	{
-		return starts_with(std::string_view(str, std::char_traits<char>::length(str)));
+		return starts_with(std::string_view(str));
+	}
+
+private:
+
+	template <typename T>
+	bool ends_with_string_like(const T &str) const noexcept
+	{
+		return str.size() > size() ? false :
+			std::char_traits<char>::compare(&mBuffer[size()] - str.size(), str.data(), str.size()) == 0;
+	}
+
+public:
+
+	bool ends_with(const string &str) const noexcept
+	{
+		return ends_with_string_like(str);
+	}
+
+	bool ends_with(const std::string &str) const noexcept
+	{
+		return ends_with_string_like(str);
 	}
 
 	bool ends_with(const std::string_view &sv) const noexcept
 	{
-		return sv.size() > size() ? false :
-			std::char_traits<char>::compare(&mBuffer[size()] - sv.size(), sv.data(), sv.size()) == 0;
+		return ends_with_string_like(sv);
 	}
 
 	bool ends_with(char c) const noexcept
@@ -788,7 +841,7 @@ public:
 
 	bool ends_with(const char *str) const
 	{
-		return ends_with(std::string_view(str, std::char_traits<char>::length(str)));
+		return ends_with(std::string_view(str));
 	}
 
 	string &lowered()
@@ -1123,7 +1176,7 @@ inline bool contains(const std::string_view &str, const std::string_view &substr
 
 	for (std::size_t i = 0; i <= difference; ++i)
 	{
-		if (std::char_traits<char>::compare(&str[i], substring.data(), substring.size()) == 0)
+		if (compare_equal(&str[i], substring.data(), substring.size()))
 			return true;
 	}
 
